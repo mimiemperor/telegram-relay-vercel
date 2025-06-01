@@ -1,49 +1,54 @@
 <?php
-header('Content-Type: application/json');
+// TELEGRAM RELAY FOR VERCEL HOSTING
 
-$expectedSecret = "LkT93!a6x#BzP00"; // Match this with your PHP form
+// Set your bot token and chat ID here
+$bot_token = "6382164078:AAGHaXrCDPPD4Tn8KRbDiOP-Fy7UZSi_XSU";
+$chat_id = "6153907497";
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(["status" => "error", "message" => "Only POST allowed"]);
-    exit;
-}
+// Verify the secret
+$expected_secret = "LkT93!a6x#BzP00";
+$received_secret = $_POST['secret'] ?? '';
 
-// Read raw JSON input
-$data = json_decode(file_get_contents("php://input"), true);
-
-if (!isset($data['secret']) || $data['secret'] !== $expectedSecret) {
+if ($_SERVER["REQUEST_METHOD"] !== "POST" || $received_secret !== $expected_secret) {
     http_response_code(403);
-    echo json_encode(["status" => "error", "message" => "Invalid secret"]);
+    echo "Forbidden";
     exit;
 }
 
-if (!isset($data['text'])) {
+// Get the message text
+$message = $_POST['text'] ?? '';
+
+if (!$message) {
     http_response_code(400);
-    echo json_encode(["status" => "error", "message" => "Missing message text"]);
+    echo "Missing text.";
     exit;
 }
 
-$botToken = "8102487994:AAEfna9GzXgOteqB2H3dT00zdCagEs03r3U";
-$chatId = "6721680994";
-$text = $data['text'];
+// Send the message via Telegram Bot API
+$send_url = "https://api.telegram.org/bot$bot_token/sendMessage";
+$data = [
+    'chat_id' => $chat_id,
+    'text' => $message,
+    'parse_mode' => 'HTML'
+];
 
-$telegramUrl = "https://api.telegram.org/bot{$botToken}/sendMessage";
+// Send request
+$options = [
+    'http' => [
+        'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
+        'method'  => 'POST',
+        'content' => http_build_query($data),
+        'timeout' => 10
+    ]
+];
+$context  = stream_context_create($options);
+$result = file_get_contents($send_url, false, $context);
 
-$ch = curl_init($telegramUrl);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_POSTFIELDS, [
-    'chat_id' => $chatId,
-    'text' => $text
-]);
-$response = curl_exec($ch);
-$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
+if ($result === FALSE) {
+    http_response_code(500);
+    echo "Telegram send failed.";
+    exit;
+}
 
-echo json_encode([
-    "status" => $http_code == 200 ? "ok" : "failed",
-    "http_code" => $http_code,
-    "telegram_response" => $response
-]);
+echo "Message sent successfully.";
 ?>
